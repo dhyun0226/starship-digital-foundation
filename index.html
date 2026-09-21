@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="STARSHIP Digital Foundation 가설 기반 아키텍처 제안" />
+  <title>STARSHIP Digital Foundation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: 'loose',
+      theme: 'base',
+      flowchart: { htmlLabels: true, curve: 'basis', useMaxWidth: true },
+      themeVariables: {
+        fontFamily: 'Inter, Noto Sans KR, sans-serif',
+        primaryColor: '#fff3a8',
+        primaryBorderColor: '#8d7000',
+        lineColor: '#696969',
+        clusterBkg: '#fbfbf8',
+        clusterBorder: '#d8d8d2'
+      }
+    });
+  </script>
+</head>
+<body>
+  <header class="hero">
+    <nav>
+      <a class="brand" href="#top">STARSHIP <span>Digital Foundation</span></a>
+      <div class="nav-links"><a href="#aws">AWS</a><a href="#design">CHEESE</a></div>
+    </nav>
+    <div class="hero-copy" id="top">
+      <p class="eyebrow">PERSONAL ARCHITECTURE PROPOSAL · WORKING DRAFT</p>
+      <h1>첫 시스템을 넘어,<br />다음 제품이 빨라지는 기반.</h1>
+      <p class="lead">공고와 면접에서 확인한 방향을 토대로 정리한 개인 제안입니다. 실제 내부 구조를 나타내는 문서가 아니며, 입사 후 AS-IS·예산·보안정책을 확인해 변경하는 것을 전제로 합니다.</p>
+      <div class="facts"><span>EC2 · RDS · S3</span><span>CI/CD · Monitoring</span><span>Evaluation First</span><span>One-developer Operable</span></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="architecture" id="aws">
+      <div class="section-title">
+        <p class="number">01</p>
+        <div><p class="eyebrow dark">AWS APPLICATION FOUNDATION</p><h2>인사평가에서 시작하는 AWS 운영 기반</h2></div>
+      </div>
+
+      <div class="visual-layout">
+        <div class="diagram-card">
+          <pre class="mermaid">
+flowchart TB
+  U[임직원 · 평가자 · 인사담당자]
+  AUTH[기존 SSO · MFA<br/>인증 방식 확인 필요]
+  DNS[Route 53 · ACM]
+  WAF[AWS WAF]
+
+  subgraph AWS[AWS · Production Account]
+    direction TB
+    subgraph EDGE[Public Subnet · Multi-AZ]
+      ALB[Application Load Balancer<br/>TLS · Health Check]
+    end
+    subgraph APP[Private Application Subnet · Multi-AZ]
+      EC2A[EC2-A · Docker<br/>Vue 3 + Spring Boot]
+      EC2B[EC2-B · 필요 시 이중화]
+    end
+    subgraph DATA[Private Data Subnet · Multi-AZ]
+      RDS[(RDS PostgreSQL<br/>Backup · PITR · KMS)]
+    end
+    S3[(Private S3<br/>File · Versioning · KMS)]
+    SEC[Secrets Manager<br/>IAM Role]
+    OBS[CloudWatch · CloudTrail<br/>Alarm · Audit]
+  end
+
+  HR[HR · Groupware<br/>Employee / Organization Source]
+  GIT[Git Repository]
+  PIPE[Test · Scan · Docker Build<br/>ECR · DEV · STAGE · Approval]
+  OPS[개발자 · 정보보안 · 인사<br/>장애 유형별 대응]
+
+  U --> AUTH --> DNS --> WAF --> ALB
+  ALB --> EC2A
+  ALB -. 확장 .-> EC2B
+  EC2A --> RDS
+  EC2B --> RDS
+  EC2A --> S3
+  EC2A --> SEC
+  HR -. API / Batch .-> EC2A
+  GIT --> PIPE --> EC2A
+  EC2A --> OBS --> OPS
+  RDS --> OBS
+  ALB --> OBS
+
+  classDef people fill:#fff1a8,stroke:#997900,color:#171717;
+  classDef cloud fill:#e5efff,stroke:#477db7,color:#171717;
+  classDef secure fill:#e1f6e9,stroke:#43835d,color:#171717;
+  classDef ops fill:#eee6ff,stroke:#7b61aa,color:#171717;
+  class U,HR people;
+  class DNS,WAF,ALB,EC2A,EC2B cloud;
+  class AUTH,RDS,S3,SEC secure;
+  class OBS,GIT,PIPE,OPS ops;
+          </pre>
+        </div>
+
+        <aside class="notes">
+          <div class="note"><b>01 · Private by default</b><p>인터넷 진입점은 WAF·ALB로 제한하고 EC2, RDS, S3는 직접 공개하지 않습니다.</p></div>
+          <div class="note"><b>02 · 공고 기반 기술</b><p>EC2·RDS·S3를 우선 사용합니다. 컨테이너는 EC2 위 Docker로 시작하고 복잡한 오케스트레이션은 보류합니다.</p></div>
+          <div class="note"><b>03 · Build once</b><p>검증한 동일 이미지를 DEV→STAGE→PROD로 승격하고 운영 배포에는 승인을 둡니다.</p></div>
+          <div class="note"><b>04 · Source of truth</b><p>직원·조직 데이터는 기존 HR 또는 그룹웨어를 원천으로 사용하고 평가차수별 스냅샷을 보존합니다.</p></div>
+          <div class="note"><b>05 · Detect before report</b><p>CloudWatch와 CloudTrail로 장애·변경을 추적하고 개발·보안·인사·외부업체의 대응 범위를 나눕니다.</p></div>
+          <div class="note assumption"><b>입사 후 결정</b><p>기존 AWS 계정, 접근 방식, MSP, 이중화, RTO/RPO, 예산과 개인정보 정책을 확인한 뒤 확정합니다.</p></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="architecture inverted" id="design">
+      <div class="section-title">
+        <p class="number">02</p>
+        <div><p class="eyebrow dark">CHEESE DESIGN SYSTEM</p><h2>제품에서 검증하며 성장하는 공통 UI 기반</h2></div>
+      </div>
+
+      <div class="visual-layout design-layout">
+        <div class="diagram-card">
+          <pre class="mermaid">
+flowchart TB
+  BRAND[STARSHIP Brand Principles<br/>명확함 · 에너지 · 콘텐츠 중심]
+  TOKEN[Design Tokens<br/>Color · Type · Space · Radius · Shadow · Motion]
+  PRIM[Accessible Primitives<br/>Focus · Keyboard · State · Responsive]
+  COMP[Vue Components<br/>Button · Input · Select · Modal · Table · Upload]
+  PATTERN[Business Patterns<br/>Form · Search · Approval · Permission · Empty/Error]
+
+  subgraph PRODUCTS[STARSHIP Digital Products]
+    EV[Evaluation<br/>첫 Reference Product]
+    ADMIN[Admin · Portal]
+    AUD[Audition]
+    WEB[Official Website<br/>Creative Freedom]
+  end
+
+  DOC[Documentation<br/>Story · Usage · Do / Don't · Accessibility]
+  FEED[실제 제품 Feedback<br/>검증된 항목만 승격]
+
+  BRAND --> TOKEN --> PRIM --> COMP --> PATTERN
+  PATTERN --> EV
+  PATTERN --> ADMIN
+  PATTERN --> AUD
+  TOKEN --> WEB
+  COMP --> DOC
+  PATTERN --> DOC
+  EV --> FEED
+  ADMIN --> FEED
+  AUD --> FEED
+  FEED --> TOKEN
+  FEED --> COMP
+  FEED --> PATTERN
+
+  classDef brand fill:#fff1a8,stroke:#997900,color:#171717;
+  classDef core fill:#e5efff,stroke:#477db7,color:#171717;
+  classDef product fill:#e1f6e9,stroke:#43835d,color:#171717;
+  classDef learn fill:#eee6ff,stroke:#7b61aa,color:#171717;
+  class BRAND,TOKEN brand;
+  class PRIM,COMP,PATTERN core;
+  class EV,ADMIN,AUD,WEB product;
+  class DOC,FEED learn;
+          </pre>
+        </div>
+
+        <aside class="notes">
+          <div class="note"><b>01 · 제품이 먼저</b><p>디자인시스템 전체를 먼저 만들지 않습니다. 인사평가에 필요한 UI부터 구현하고 반복되는 것만 승격합니다.</p></div>
+          <div class="note"><b>02 · Token → Pattern</b><p>색상·간격 같은 Token에서 시작해 컴포넌트와 승인·검색·권한 같은 업무 패턴으로 확장합니다.</p></div>
+          <div class="note"><b>03 · 업무 UI는 단순하게</b><p>CHEESE라는 이름은 기억점을 만들지만 실제 내부 업무 화면은 명확성과 접근성을 우선합니다.</p></div>
+          <div class="note"><b>04 · 공식 홈페이지는 예외</b><p>브랜드·아티스트 표현이 핵심인 홈페이지에는 공통 Token만 공유하고 Creative Freedom을 보장합니다.</p></div>
+          <div class="note"><b>05 · 문서가 제품</b><p>컴포넌트 수보다 사용 기준, 상태, 접근성, Do/Don't를 남겨 다음 개발자가 바로 재사용하게 합니다.</p></div>
+          <div class="note assumption"><b>성공 기준</b><p>두 번째 제품에서 UI 중복 구현과 개발 리드타임이 실제로 감소할 때 디자인시스템이 성공한 것입니다.</p></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="principles">
+      <p class="eyebrow dark">DECISION PRINCIPLES</p>
+      <h2>Simple · Secure · Observable · Reusable</h2>
+      <div class="principle-grid">
+        <div><b>Managed over operated</b><p>한 명이 지속적으로 운영 가능한 관리형 서비스를 우선합니다.</p></div>
+        <div><b>Modular monolith first</b><p>필요성이 확인되기 전에는 MSA·Kubernetes 같은 복잡성을 추가하지 않습니다.</p></div>
+        <div><b>Evidence before scale</b><p>트래픽·장애·비용을 측정한 뒤 이중화와 확장을 결정합니다.</p></div>
+        <div><b>Document decisions</b><p>무엇보다 왜 선택했는지를 ADR과 Runbook에 남깁니다.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><p>Personal proposal based on publicly available recruitment information and interview recollection. Not an official STARSHIP Entertainment architecture.</p></footer>
+</body>
+</html>
